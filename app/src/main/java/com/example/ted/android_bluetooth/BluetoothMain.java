@@ -1,6 +1,7 @@
 package com.example.ted.android_bluetooth;
 
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -12,12 +13,14 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import java.util.Set;
+
 public class BluetoothMain extends AppCompatActivity {
 
   final static String logtag = "BlueTooth";
 
   BluetoothAdapter bta;
-  int DISCOVERY_REQUEST = -1;
+  int DISCOVERY_REQUEST = 1;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -68,23 +71,46 @@ public class BluetoothMain extends AppCompatActivity {
   @Override
   public void onResume() {
     super.onResume();
-    String actionStateChanged = BluetoothAdapter.ACTION_STATE_CHANGED;
+    //String actionStateChanged = BluetoothAdapter.ACTION_STATE_CHANGED;
     //String scanModeChanged = BluetoothAdapter.ACTION_SCAN_MODE_CHANGED;
-    IntentFilter filter = new IntentFilter(actionStateChanged);
-    registerReceiver(btstate, filter);
-    Log.d(logtag, "onResume");
+    //IntentFilter filter = new IntentFilter(scanModeChanged);
+    //registerReceiver(btstate, filter);
+    //Log.d(logtag, "onResume");
   }
 
   private void connect() {
     //startActivityForResult(new Intent(actionRequestEnable), 0);
     //String actionRequestEnable = BluetoothAdapter.ACTION_REQUEST_ENABLE;
+
+    String scanModeChanged = BluetoothAdapter.ACTION_SCAN_MODE_CHANGED;
+
+    IntentFilter f1 = new IntentFilter(scanModeChanged);
+    IntentFilter f4 = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+
+    registerReceiver(btstate, f1);
+    //registerReceiver(btstate, f2);
+    registerReceiver(discoveryResult, f4);
+
     String actionRequestDiscoverable = BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE;
-    startActivityForResult(new Intent(actionRequestDiscoverable), DISCOVERY_REQUEST);
+    Intent intent = new Intent(actionRequestDiscoverable);
+    intent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 0 );
+    startActivityForResult(intent, DISCOVERY_REQUEST);
+
+    Log.d(logtag, "End of connect");
+
   }
 
   private void disconnect() {
     bta.disable();
     Log.d(logtag, "disconnected");
+  }
+
+  private void listDevices() {
+
+    Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
+    for(BluetoothDevice pairedDevice : pairedDevices) {
+      Log.d(logtag, String.format("Found : %s", pairedDevice.getName()));
+    }
   }
 
   @Override
@@ -96,9 +122,24 @@ public class BluetoothMain extends AppCompatActivity {
     if(requestCode == DISCOVERY_REQUEST) {
       Toast.makeText(this, "Discovering ...", Toast.LENGTH_LONG).show();
       Log.d(logtag, "Discovering ...");
+      listDevices();
+      boolean discover = bta.startDiscovery();
+      Log.d(logtag, String.format("Bluetooth startDiscovery = %s", discover+""));
+    }
+    else {
+      Log.d(logtag, "DISCOVERY REQUEST not granted , result code = " + resultCode);
     }
 
   }
+
+  BroadcastReceiver discoveryResult = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      String remoteDeviceName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME);
+      BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+      Log.d(logtag, String.format("Discovered : %s", remoteDeviceName));
+    }
+  };
 
   BroadcastReceiver btstate = new BroadcastReceiver() {
 
@@ -107,7 +148,10 @@ public class BluetoothMain extends AppCompatActivity {
     @Override
     public void onReceive(Context context, Intent intent) {
 
-      int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1);
+      Log.d(logtag, "inside onReceive");
+
+      String stateExtra = BluetoothAdapter.EXTRA_STATE;
+      int state = intent.getIntExtra(stateExtra, -1);
       String statustext = "";
 
       switch(state) {
@@ -127,6 +171,12 @@ public class BluetoothMain extends AppCompatActivity {
           statustext = "Bluetooth is off";
           Log.d(logtag, statustext);
           break;
+        case BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE:
+          statustext = "Scan Mode Connectable and discoverable";
+          Log.d(logtag, statustext);
+          break;
+        default:
+          statustext = String.format("Unhandled status : %s", state);
       }
       Toast.makeText(context, statustext, Toast.LENGTH_LONG).show();
      }
